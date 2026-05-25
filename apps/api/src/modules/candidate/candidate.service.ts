@@ -193,6 +193,64 @@ export class CandidateService {
     return { uploadStatus: row.upload_status, rawText: row.raw_text };
   }
 
+  saveProfile(id: string, data: {
+    basics?: { name?: string; phone?: string; email?: string; city?: string };
+    education?: Array<{ school?: string; major?: string; degree?: string; graduatedAt?: string }>;
+    workExperience?: Array<{ company?: string; position?: string; startDate?: string; endDate?: string; summary?: string }>;
+    skills?: Array<{ name?: string; category?: string }>;
+    projects?: Array<{ name?: string; techStack?: string[]; responsibilities?: string; highlights?: string }>;
+  }) {
+    const candidate = this.db.prepare('SELECT * FROM candidates WHERE id = ?').get(id) as any;
+    if (!candidate) throw new NotFoundException('Candidate not found');
+
+    const basics = data.basics || {};
+    this.db.prepare(
+      `UPDATE candidates SET name = ?, phone = ?, email = ?, city = ?, upload_status = 'completed', status = 'pending', updated_at = datetime('now') WHERE id = ?`
+    ).run(basics.name || null, basics.phone || null, basics.email || null, basics.city || null, id);
+
+    this.db.prepare('DELETE FROM educations WHERE candidate_id = ?').run(id);
+    if (data.education) {
+      for (const edu of data.education) {
+        this.db.prepare(
+          `INSERT INTO educations (id, candidate_id, school, major, degree, graduated_at) VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(randomUUID(), id, edu.school || null, edu.major || null, edu.degree || null, edu.graduatedAt || null);
+      }
+    }
+
+    this.db.prepare('DELETE FROM work_experiences WHERE candidate_id = ?').run(id);
+    if (data.workExperience) {
+      for (const exp of data.workExperience) {
+        this.db.prepare(
+          `INSERT INTO work_experiences (id, candidate_id, company, position, start_date, end_date, summary) VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(randomUUID(), id, exp.company || null, exp.position || null, exp.startDate || null, exp.endDate || null, exp.summary || null);
+      }
+    }
+
+    this.db.prepare('DELETE FROM skills WHERE candidate_id = ?').run(id);
+    if (data.skills) {
+      for (const skill of data.skills) {
+        this.db.prepare(
+          `INSERT INTO skills (id, candidate_id, name, category) VALUES (?, ?, ?, ?)`
+        ).run(randomUUID(), id, skill.name || null, skill.category || null);
+      }
+    }
+
+    this.db.prepare('DELETE FROM projects WHERE candidate_id = ?').run(id);
+    if (data.projects) {
+      for (const proj of data.projects) {
+        this.db.prepare(
+          `INSERT INTO projects (id, candidate_id, name, tech_stack, responsibilities, highlights) VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(
+          randomUUID(), id, proj.name || null,
+          proj.techStack ? JSON.stringify(proj.techStack) : null,
+          proj.responsibilities || null, proj.highlights || null,
+        );
+      }
+    }
+
+    return this.findOne(id);
+  }
+
   private formatCandidateRow(row: any) {
     return {
       id: row.id,

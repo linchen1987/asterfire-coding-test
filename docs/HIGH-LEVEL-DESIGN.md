@@ -141,11 +141,11 @@ uploading ──→ pending ──→ completed
 |------|------|------|-------------|
 | `uploading` | 文件开始上传 | PDF 文件正在传输中 | 仅上传弹框可见 |
 | `pending` | 上传接口返回 | raw_text 已解析完成，等待 HR 点击"开始解析" | 上传页可见，显示"开始解析"按钮 |
-| `completed` | AI 提取完成 | 结构化信息已入库，`status` 自动设为 `pending` | 出现在候选人列表和管理流程 |
+| `completed` | HR 确认保存 | 结构化信息已入库，`status` 自动设为 `pending` | 出现在候选人列表和管理流程 |
 | `failed` | AI 提取失败 | 可重试 | 可见，显示"重试"按钮 |
 
 - `uploading` → `pending`：上传接口同步完成（PDF 解析、raw_text 入库），接口返回时直接为 `pending`
-- `pending` → `completed`：HR 手动点击"开始解析"按钮，AI SSE 流推送 complete 事件后自动切换，同时 `status = pending`
+- `pending` → `completed`：HR 点击"开始解析" → AI SSE 返回提取数据 → 前端展示可编辑表单 → HR 确认保存后切换，同时 `status = pending`
 - `pending` → `failed`：AI 提取过程出错；`failed` 可重新点击"重试"回到 `pending` 再触发提取
 
 ### status（业务状态）
@@ -254,29 +254,80 @@ Base URL: `http://<backend-host>:3001/api/v1`
 }
 ```
 
-### 3.2 AI 信息提取 (SSE)
+### 3.2 AI 信息提取 (SSE) + 档案保存
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `POST` | `/ai/extract/:candidateId` | 触发 AI 提取 (返回 SSE 流) |
+| `POST` | `/ai/extract/:candidateId` | 触发 AI 提取 (返回 SSE 流，不写入 DB) |
+| `PUT` | `/candidates/:candidateId/profile` | 保存候选人档案 (HR 确认后的完整数据写入 DB) |
 
-**SSE 事件格式：**
+**SSE 事件格式（AI streaming 实时推送，不写 DB）：**
 ```
 event: progress
-data: {"step": "extracting", "message": "正在提取基本信息..."}
+data: {"step": "connecting", "message": "正在连接 AI 服务..."}
+
+event: thinking
+data: {"delta": "让我分析这份简历..."}
+
+event: thinking
+data: {"delta": "提取姓名和联系方式..."}
+
+event: progress
+data: {"step": "generating", "message": "正在生成基本信息..."}
 
 event: partial
-data: {"field": "basics", "data": {"name": "张三", "phone": "138xxxx"}}
+data: {"field": "basics", "data": {"name": "张三", "phone": "138xxxx", "email": null, "city": null}}
+
+event: progress
+data: {"step": "generating", "message": "正在生成教育背景..."}
 
 event: partial
-data: {"field": "education", "data": [{"school": "清华大学", ...}]}
+data: {"field": "education", "data": [{"school": "清华大学", "major": "CS", "degree": "本科", "graduatedAt": "2020"}]}
+
+event: partial
+data: {"field": "workExperience", "data": [{"company": "字节", ...}]}
+
+event: partial
+data: {"field": "skills", "data": [{"name": "React", "category": "framework"}]}
+
+event: partial
+data: {"field": "projects", "data": []}
 
 event: complete
-data: {"candidateId": "uuid-c1", "status": "completed"}
+data: {"candidateId": "uuid-c1"}
 
 event: error
 data: {"message": "AI 服务异常"}
 ```
+
+**SSE 事件类型说明：**
+
+| 事件 | 说明 | 前端行为 |
+|------|------|----------|
+| `progress` | 阶段状态更新 | 显示进度文案（连接中、生成中...） |
+| `thinking` | AI 思维链 token（仅支持 reasoning 的模型） | 滚动显示 AI 思考过程，让用户知道 AI 在工作 |
+| `partial` | 一个完整字段解析完毕 | 渲染该字段的骨架屏 → 实际数据 |
+| `complete` | 全部字段提取完毕 | 显示可编辑表单 + "确认保存"按钮 |
+| `error` | 出错 | 显示错误信息 + "重试"按钮 |
+
+**后端实现要点：**
+- AI 调用必须使用 `stream: true`
+- 逐 token 积累 buffer，通过括号匹配检测字段闭合（`"basics": {...}` 闭合时发送 partial）
+- 如果模型返回 `reasoning_content`（如 DeepSeek），实时转发为 `thinking` 事件
+- 所有事件基于 AI stream 实时产生，不等待完整响应
+
+**档案保存请求 `PUT /candidates/:id/profile`：**
+```json
+{
+  "basics": { "name": "张三", "phone": "138xxxx", "email": "zhang@example.com", "city": "北京" },
+  "education": [{ "school": "清华大学", "major": "CS", "degree": "本科", "graduatedAt": "2020" }],
+  "workExperience": [{ "company": "字节", "position": "前端", "startDate": "2020", "endDate": "2023", "summary": "..." }],
+  "skills": [{ "name": "React", "category": "framework" }],
+  "projects": [{ "name": "xxx", "techStack": ["React"], "responsibilities": "...", "highlights": "..." }]
+}
+```
+
+**档案保存响应：** 返回更新后的候选人完整数据，`upload_status = completed`，`status = pending`。
 
 ### 3.3 候选人管理
 
@@ -393,17 +444,28 @@ POST /resumes/upload (multipart, 含 jobId)
     ↓
 HR 点击某个候选人的 "开始解析" 按钮
     ↓
-POST /ai/extract/:id (SSE)
+POST /ai/extract/:id (SSE, AI stream)
     ↓
-SSE 逐步推送 partial 事件，卡片从骨架屏逐步渲染:
-  ├── progress: "正在提取张三的信息..."
-  ├── partial: basics → 渲染姓名、电话、邮箱、城市
-  ├── partial: education → 渲染教育列表
-  ├── partial: workExperience → 渲染工作经历时间线
-  ├── partial: skills → 渲染技能标签云
-  └── complete → upload_status = completed, status = pending
+SSE 基于 AI stream 实时推送，用户立即看到数据流动:
+   ├── progress: "正在连接 AI 服务..."
+   ├── thinking: "让我分析这份简历..." ← AI 思维链（如果有）
+   ├── progress: "正在生成基本信息..."
+   ├── partial: basics → AI 刚输出完 basics 字段，立即渲染
+   ├── progress: "正在生成教育背景..."
+   ├── partial: education → AI 刚输出完 education 字段，立即渲染
+   ├── partial: workExperience → 同上
+   ├── partial: skills → 同上
+   └── complete → 全部字段提取完毕（未写入 DB）
     ↓
-该候选人卡片显示完成状态，"开始解析"按钮消失
+卡片展示可编辑的提取结果表单，HR 可修改任意字段
+    ↓
+HR 点击 "确认保存" 按钮
+    ↓
+PUT /candidates/:id/profile (发送全部提取数据)
+    ↓
+后端写入 DB，upload_status = completed，status = pending
+    ↓
+该候选人卡片显示完成状态
 候选人出现在 /candidates 列表页
     ↓
 HR 继续点击下一个候选人的 "开始解析" 按钮
@@ -428,16 +490,20 @@ POST /candidates/:id/score
 前端展示雷达图 + 环形进度条 + 评语卡片
 ```
 
-#### 手动修正流程 (加分项)
+#### 手动修正流程
+
+**上传页（核心流程）**: AI 提取完成后，ExtractProgress 卡片直接展示可编辑表单，HR 在确认保存前即可修改任意字段。
+
+**候选人详情页（加分项）**: 已确认保存的候选人，在详情页仍可二次编辑。
 
 ```
-HR 在候选人详情页查看 AI 提取结果
+HR 在候选人详情页查看已保存的提取结果
     ↓
 点击某区域的"编辑"按钮 → 切换为表单模式
     ↓
 HR 修改字段 (如修正电话号码、补充工作经历)
     ↓
-PUT /candidates/:id → 保存更新
+PUT /candidates/:id/profile → 保存更新
     ↓
 表单切回展示模式，显示更新后的数据
 ```
@@ -447,7 +513,7 @@ PUT /candidates/:id → 保存更新
 | 组件 | 目录 | 说明 |
 |------|------|------|
 | `UploadDialog` | `components/candidate/` | 上传弹框 (岗位选择 + 拖拽区 + 文件列表) |
-| `ExtractProgress` | `components/candidate/` | 单个候选人的 AI 提取进度卡片 (骨架屏→实际数据) |
+| `ExtractProgress` | `components/candidate/` | 单个候选人卡片 (AI思考过程→骨架屏逐步填充→可编辑表单→确认保存) |
 | `ExtractList` | `components/candidate/` | 上传页候选人卡片列表 (展示不同状态: 待解析/解析中/已完成/失败) |
 | `PdfThumbnail` | `components/candidate/` | PDF 首页缩略图预览 (加分项) |
 | `CandidateTable` | `components/candidate/` | 候选人表格视图 |
@@ -472,7 +538,30 @@ PUT /candidates/:id → 保存更新
 
 - **模型**: OpenAI Compatible API (支持任意兼容接口, 如 DeepSeek / Ollama / OpenAI)
 - **配置**: 通过环境变量配置 `AI_API_BASE` + `AI_API_KEY` + `AI_MODEL`
+- **流式调用**: 信息提取必须使用 `stream: true`，逐 token 解析，实时推送 SSE 事件
+- **思维链支持**: 如果模型返回 `reasoning_content`（如 DeepSeek），实时转发为 `thinking` 事件
 - **Prompt 工程**: 使用结构化 prompt + JSON schema 约束输出格式
+
+### 5.2 信息提取流式解析策略
+
+AI 以 `stream: true` 返回 token 流，后端需要实时解析并推送：
+
+```
+AI stream tokens:  { " b a s i c s " :   { " n a m e " : " 张 三 " ...
+                                                          ↑ 括号闭合 → 检测到 basics 字段完成
+                                                          → 发送 event: partial (basics)
+```
+
+**字段闭合检测算法**：
+1. 维护一个字符串 buffer，逐 token 追加
+2. 维护括号深度计数器（`{` +1, `}` -1）
+3. 当检测到 `"fieldName":` 模式且后续的 `{...}` 或 `[...]` 闭合时（深度归零），提取该字段 JSON
+4. 解析为结构化数据，发送 `event: partial`
+5. 已解析的字段从 buffer 中移除，继续处理下一个字段
+
+**思维链处理**：
+- OpenAI SDK stream chunk 中如果包含 `reasoning_content` 字段，累加并发送 `event: thinking`
+- 如果模型不支持思维链，跳过此步骤
 
 ### 5.2 信息提取 Prompt 设计
 

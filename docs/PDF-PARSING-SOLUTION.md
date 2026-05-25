@@ -19,11 +19,11 @@ uploading ──→ pending ──→ completed
 |------|------|------|--------|
 | `uploading` | 文件开始上传 | PDF 正在传输 | 仅上传弹框 |
 | `pending` | 上传接口返回 | raw_text 已解析完成，等待 HR 点击"开始解析" | 上传页可见，显示"开始解析"按钮 |
-| `completed` | AI 提取完成 | 结构化信息已入库，候选人信息完整 | 出现在候选人列表和管理流程 |
+| `completed` | HR 确认保存 | 结构化信息已入库 | 出现在候选人列表和管理流程 |
 | `failed` | AI 提取失败 | 可重试 | 可见，显示"重试"按钮 |
 
 - `uploading` → `pending`：上传接口同步完成（PDF 解析、raw_text 入库），接口返回时直接为 `pending`
-- `pending` → `completed`：HR 手动点击"开始解析"，AI SSE 流 complete 事件后自动切换，同时 `status = pending`
+- `pending` → `completed`：HR 点击"开始解析" → AI SSE 返回提取数据 → 前端展示可编辑表单 → HR 确认保存后切换
 - `pending` → `failed`：AI 提取出错；`failed` 可重新点击"重试"
 
 ### 1.2 status（业务状态）
@@ -106,60 +106,71 @@ status:                     (不关心)      pending → screened → interviewi
 
 ---
 
-### 步骤 2：AI 信息提取（SSE，HR 手动触发）
+### 步骤 2：AI 信息提取（SSE + AI Stream，HR 手动触发）+ 确认保存
 
 **触发条件**: HR 在上传页面点击候选人卡片上的"开始解析"按钮，且该候选人 `upload_status = pending`。
 
 ```
-前端                            后端
- │                               │
- │  HR 点击候选人的"开始解析"    │
- │                               │
- │  ── POST /ai/extract/:id ───→│
- │     (建立 SSE 连接)           │
- │                               │ 读取 candidate.raw_text
- │                               │ 构造提取 Prompt
- │                               │ 调用 AI API (stream: true)
- │                               │
- │  ← event: progress ──────────│ "正在提取基本信息..."
- │    卡片显示进度文案            │
- │                               │
- │  ← event: partial ───────────│ { field: "basics",
- │    骨架屏→渲染: 姓名电话邮箱  │   data: {name:"张三",...} }
- │                               │
- │  ← event: partial ───────────│ { field: "education",
- │    骨架屏→渲染: 教育列表      │   data: [{school:"清华",...}] }
- │                               │
- │  ← event: partial ───────────│ { field: "workExperience",
- │    骨架屏→渲染: 工作经历      │   data: [{company:"字节",...}] }
- │                               │
- │  ← event: partial ───────────│ { field: "skills",
- │    骨架屏→渲染: 技能标签      │   data: [{name:"React",...}] }
- │                               │
- │                               │ 写入 DB:
- │                               │   candidate: name, phone, email, city
- │                               │   educations / work_experiences / skills
- │                               │   upload_status = completed
- │                               │   status = pending
- │                               │
- │  ← event: complete ──────────│ { candidateId,
- │                               │   uploadStatus: "completed" }
- │  SSE 连接关闭                 │
- │                               │
-  │  该候选人卡片显示完成状态      │
- │  "开始解析"按钮消失            │
- │  候选人出现在 /candidates 列表│
- │                               │
- │  HR 可继续点击下一个候选人    │
- │  的"开始解析"按钮             │
+前端                            后端                          AI API
+ │                               │                              │
+ │  HR 点击候选人的"开始解析"    │                              │
+ │                               │                              │
+ │  ── POST /ai/extract/:id ───→│                              │
+ │     (建立 SSE 连接)           │ 读取 candidate.raw_text      │
+ │                               │ 构造提取 Prompt              │
+ │                               │ 调用 AI API (stream: true) ─→│
+ │                               │                              │
+ │  ← event: progress ──────────│ "正在连接 AI 服务..."        │
+ │                               │                              │
+ │                               │ ← reasoning_content delta ───│ (DeepSeek 等)
+ │  ← event: thinking ──────────│ "让我分析这份简历..."        │
+ │  ← event: thinking ──────────│ "提取姓名和联系方式..."       │
+ │    卡片显示 AI 思考过程       │                              │
+ │                               │                              │
+ │                               │ ← content delta ─────────────│
+ │  ← event: progress ──────────│ "正在生成基本信息..."        │
+ │                               │ 积累 buffer, 检测字段闭合    │
+ │  ← event: partial ───────────│ { field: "basics",           │
+ │    骨架屏→渲染: 姓名电话邮箱  │   data: {name:"张三",...} }   │
+ │                               │                              │
+ │  ← event: progress ──────────│ "正在生成教育背景..."        │
+ │  ← event: partial ───────────│ { field: "education",        │
+ │    骨架屏→渲染: 教育列表      │   data: [{school:"清华",...}]}│
+ │                               │                              │
+ │  ← event: partial ───────────│ { field: "workExperience",   │
+ │    骨架屏→渲染: 工作经历      │   data: [{company:"字节",...}]}
+ │  ← event: partial ───────────│ { field: "skills",           │
+ │    骨架屏→渲染: 技能标签      │   data: [{name:"React",...}]  }
+ │                               │                              │
+ │  ← event: complete ──────────│ { candidateId } (未写 DB)    │
+ │  SSE 连接关闭                 │                              │
+ │                               │                              │
+ │  卡片展示可编辑表单           │                              │
+ │  HR 可修改任意字段            │                              │
+ │                               │                              │
+ │  HR 点击"确认保存"            │                              │
+ │  ── PUT /candidates/:id      │                              │
+ │     /profile ────────────────→│ 写入 DB:                     │
+ │     (发送全部提取数据)        │   candidate: name,phone...   │
+ │                               │   educations / work_exp /    │
+ │                               │   skills / projects          │
+ │                               │   upload_status = completed  │
+ │                               │   status = pending           │
+ │                               │                              │
+ │  ←── 返回更新后的候选人 ──────│                              │
+ │  卡片显示完成状态 ✓           │                              │
+ │  候选人出现在 /candidates 列表│                              │
 ```
 
-**耗时**: 每个候选人 5-15 秒
+**耗时**: AI 提取 5-15 秒（streaming 实时可见），确认保存 < 1 秒
 
 **关键点**:
-- HR 手动逐个触发，可自主决定解析顺序和是否解析
-- 每个候选人有独立的卡片，骨架屏逐步替换为实际数据
-- `complete` 后 `upload_status = completed`，`status = pending`，候选人出现在列表页
+- **AI 调用必须 `stream: true`**，后端逐 token 积累 buffer，检测字段闭合后立即发送 `partial`
+- 如果模型返回 `reasoning_content`（如 DeepSeek），实时转发为 `thinking` 事件，用户可看到 AI 思考过程
+- `progress` 事件反映当前阶段（连接中、生成中），让用户感知实时进展
+- SSE 只流式返回 AI 提取的数据，不写入 DB
+- 前端展示可编辑表单，HR 可修正 AI 提取的信息后再确认保存
+- 确认保存时才写入 DB，`upload_status = completed`，`status = pending`
 - 失败的候选人显示错误信息 + "重试"按钮，支持手动重新触发
 
 ---
@@ -226,19 +237,26 @@ HR 操作           前端                    后端                    AI API
   │               │ 页面展示3个候选人卡片 │                       │
   │               │ 每个卡片: "开始解析"  │                       │
   │               │                       │                       │
-  │  点击候选人1  │                       │                       │
-  │  "开始解析"   │                       │                       │
-  │ ─────────────→│                       │                       │
-  │               │ POST /ai/extract/1    │                       │
-  │               │ (SSE) ───────────────→│                       │
-  │               │                       │ ─────────────────────→│
-  │               │ ←─ partial: basics ───│ ←─ stream ───────────│
-  │  卡片1:       │ ←─ partial: edu ─────│ ←─ stream ───────────│
-  │  骨架屏逐步   │ ←─ partial: work ────│ ←─ stream ───────────│
-  │  变为实际数据 │ ←─ partial: skills ──│ ←─ stream ───────────│
-  │               │ ←─ complete ─────────│ upload→completed      │
-  │               │                       │ status = pending      │
-  │               │ 卡片1: 完成 ✓        │                       │
+ │  点击候选人1  │                       │                       │
+ │  "开始解析"   │                       │                       │
+ │ ─────────────→│                       │                       │
+ │               │ POST /ai/extract/1    │                       │
+ │               │ (SSE) ───────────────→│                       │
+ │               │                       │ 调用 AI (stream:true) │
+ │               │                       │ ─────────────────────→│
+ │               │ ←─ thinking ──────────│ ←─ reasoning delta ──│
+ │  卡片1:       │ ←─ progress ─────────│ ←─ content starts ───│
+ │  显示AI思考   │ ←─ partial: basics ──│ ←─ "basics"闭合 ─────│
+ │  骨架屏逐步   │ ←─ partial: edu ─────│ ←─ "education"闭合 ──│
+ │  变为实际数据 │ ←─ partial: work ────│ ←─ "workExp"闭合 ────│
+ │               │ ←─ partial: skills ──│ ←─ "skills"闭合 ─────│
+ │               │ ←─ complete ─────────│ stream 结束           │
+ │               │                       │ (未写 DB)             │
+ │               │ 卡片1: 可编辑表单     │                       │
+ │               │ HR 确认保存 → PUT     │                       │
+ │               │ /candidates/1/profile │                       │
+ │               │ ─────────────────────→│ 写入DB, completed     │
+ │               │ 卡片1: 完成 ✓        │                       │
   │               │                       │                       │
   │  点击候选人2  │                       │                       │
   │  "开始解析"   │                       │                       │

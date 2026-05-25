@@ -295,84 +295,82 @@ curl http://localhost:3001/api/v1/jobs
 
 ## Step 10: 后端 — AI 服务封装 + SSE 提取接口
 
-**目标**: 接入 AI API，实现 `POST /ai/extract/:candidateId` SSE 流式提取。
+**目标**: 接入 AI API，实现 `POST /ai/extract/:candidateId` SSE 流式提取（不写 DB）+ `POST /ai/extract/:candidateId/confirm` 确认保存。
 
 **操作**:
 1. 安装 `openai` SDK
 2. 创建 `modules/ai/ai.module.ts` + `ai.service.ts`：
    - 从环境变量读取 `AI_API_BASE`、`AI_API_KEY`、`AI_MODEL`
-   - 封装 `extractInfo(rawText)` 方法：调用 AI API（stream: true），使用信息提取 Prompt（参照 HIGH-LEVEL-DESIGN.md 5.2）
+   - 封装 `extractInfoStream(rawText)` 方法：调用 AI API（**`stream: true`**），返回 AsyncIterable<chunk>，使用信息提取 Prompt（参照 HIGH-LEVEL-DESIGN.md 5.2）
 3. 创建 `modules/ai/extract.controller.ts`：
    - `POST /ai/extract/:candidateId`：
      1. 校验候选人存在且 `upload_status = pending` 或 `failed`
-     2. 设置 `upload_status = pending`（如果是 failed 重试）
-     3. 读取 `raw_text`，构造提取 Prompt
-     4. 调用 AI API stream，逐步发送 SSE 事件：
-        - `event: progress` + `data: {"step":"extracting","message":"正在提取基本信息..."}`
-        - `event: partial` + `data: {"field":"basics","data":{...}}`
-        - `event: partial` + `data: {"field":"education","data":[...]}`
-        - ... (workExperience, skills, projects)
-     5. 收到完整 JSON 后，解析并写入数据库：
-        - 更新 candidate: name, phone, email, city
-        - 插入 educations, work_experiences, skills, projects（先删除旧的再插入）
-        - `upload_status = completed`, `status = pending`
-     6. 发送 `event: complete` + `data: {"candidateId":"...","uploadStatus":"completed"}`
-     7. 如果 AI 调用失败：`upload_status = failed`，发送 `event: error`
-4. SSE 响应头设置 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`
-
-**注意**: SSE 提取的实际做法——AI 流式返回的是一段一段的 token，后端需要积累完整 JSON 后再解析。partial 事件可以在收到特定段落时发送（比如积累到某个 field 完整时），或者简化为：AI 一次性返回完整 JSON，后端解析后分多个 partial 事件逐个发送给前端。
+     2. 读取 `raw_text`，构造提取 Prompt
+     3. 调用 `aiService.extractInfoStream(rawText)`，**逐 chunk 处理**：
+        - 发送 `event: progress`（"正在连接 AI 服务..."）
+        - 逐 token 积累到 buffer
+        - 如果 chunk 包含 `reasoning_content`（DeepSeek 等模型），发送 `event: thinking`
+        - 通过括号匹配检测 JSON 字段闭合（`"basics": {...}` → partial）
+        - 字段闭合时：发送 `event: progress`（"正在生成xxx..."）+ `event: partial`
+        - stream 结束：发送 `event: complete`
+     4. **不写入 DB**
+     5. 如果 AI 调用失败：发送 `event: error`
+   - `PUT /candidates/:candidateId/profile`：
+     1. 接收前端发送的完整提取数据（basics, education, workExperience, skills, projects）
+     2. 写入 DB：更新 candidate + 插入关联表
+     3. `upload_status = completed`, `status = pending`
+     4. 返回更新后的候选人
 
 **验证**:
 ```bash
-# 确保 .env 中配置了 AI_API_BASE, AI_API_KEY, AI_MODEL
-# 先上传一份 PDF（Step 7），拿到 candidateId
-
+# SSE 提取（不写 DB）— 观察实时流式输出
 curl -N http://localhost:3001/api/v1/ai/extract/<candidateId> -X POST
-# → SSE 流式输出:
-#   event: progress  data: {"step":"extracting","message":"正在提取基本信息..."}
-#   event: partial   data: {"field":"basics","data":{"name":"张三","phone":"138xxxx"}}
-#   event: partial   data: {"field":"education","data":[...]}
-#   event: partial   data: {"field":"workExperience","data":[...]}
-#   event: partial   data: {"field":"skills","data":[...]}
-#   event: complete  data: {"candidateId":"...","uploadStatus":"completed"}
+# → 立即看到 progress 事件（非空等 10 秒）
+# → 如果模型有 thinking，看到 thinking 事件逐步输出
+# → partial 事件逐字段出现（basics → education → ...）
+# → complete 事件后 DB 中 upload_status 仍为 pending
 
-curl http://localhost:3001/api/v1/candidates/<id>
-# → name, phone 等已填充，upload_status=completed, status=pending
+# 保存档案
+curl http://localhost:3001/api/v1/candidates/<candidateId>/profile -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{"basics":{"name":"张三",...},"education":[...],...}'
+# → upload_status = completed, status = pending
 ```
 
 ---
 
-## Step 11: 前端 — SSE 提取渲染 + 提取结果展示
+## Step 11: 前端 — SSE 提取渲染（含 AI 思考过程）+ 可编辑表单 + 确认保存
 
-**目标**: 前端对接 SSE 提取，逐步渲染候选人信息。
+**目标**: 前端对接 SSE 提取，实时展示 AI 思考过程和字段逐步生成，支持编辑和确认保存。
 
 **操作**:
 1. 创建 `hooks/use-ai-extract.ts`：
-   - 封装 SSE 连接逻辑（`fetch` + `ReadableStream` 解析 SSE 事件，因为 POST 请求不能用 EventSource）
-   - 管理 partial 数据状态
-   - 处理 complete、error 事件
+   - 封装 SSE 连接逻辑（`fetch` + `ReadableStream` 解析 SSE 事件）
+   - 管理 partial 数据状态、thinking 内容状态
+   - 处理 `progress`、`thinking`、`partial`、`complete`、`error` 五种事件
 2. 更新 `components/candidate/extract-progress.tsx`：
    - "开始解析"按钮调用 SSE 提取
-   - 收到 `progress` 事件：显示进度文案
-   - 收到 `partial` 事件：逐步渲染骨架屏 → 实际数据
-     - basics → 始名电话邮箱城市
-     - education → 教育列表
-     - workExperience → 工作经历时间线
-     - skills → 技能标签云
-   - 收到 `complete`：显示完成状态，按钮消失
-   - 收到 `error`：显示错误信息 + "重试"按钮
-3. 更新 `app/upload/page.tsx`：按钮 enabled，SSE 接入
+   - 收到 `progress` 事件：显示进度文案（"正在连接 AI 服务..."、"正在生成基本信息..."）
+   - 收到 `thinking` 事件：**滚动显示 AI 思考过程**（如果有），让用户知道 AI 在工作
+   - 收到 `partial` 事件：骨架屏 → 实际数据（字段逐个填充）
+   - 收到 `complete`：展示**可编辑表单**（所有字段可修改）
+   - "确认保存"按钮 → `PUT /candidates/:id/profile` → 写入 DB
+   - 确认后 `upload_status = completed`，卡片显示完成状态
+3. 更新 `app/upload/page.tsx`：接入完整流程
 
 **验证**:
 ```bash
-# 1. 打开 /upload 页面上传一份 PDF
-#    → 卡片显示"待解析" + "开始解析"按钮
-# 2. 点击"开始解析"
-#    → 卡片显示"正在提取..."
-#    → 逐步渲染: 基本信息 → 教育列表 → 工作经历 → 技能标签
-#    → 完成后显示 ✓
-# 3. 上传 3 份 PDF，逐个点击"开始解析"
-#    → 每个独立渲染，互不影响
+# 1. 上传 PDF → 卡片显示"待解析" + "开始解析"
+# 2. 点击"开始解析" → 立即看到进度（非空等）:
+#    - "正在连接 AI 服务..."
+#    - AI 思考过程（如有）滚动显示
+#    - "正在生成基本信息..." → 基本信息 骨架屏→实际数据
+#    - "正在生成教育背景..." → 教育列表 骨架屏→实际数据
+#    - 依次: 工作经历 → 技能标签 → 项目
+# 3. 渲染完成后显示可编辑表单 + "确认保存"按钮
+# 4. 可修改任意字段
+# 5. 点击"确认保存" → 写入 DB → 卡片显示完成状态
+# 6. /candidates 页面可看到该候选人
 ```
 
 ---

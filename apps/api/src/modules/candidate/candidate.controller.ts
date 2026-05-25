@@ -31,6 +31,11 @@ export class CandidateController {
     return this.candidateService.remove(id);
   }
 
+  @Put(':id/profile')
+  saveProfile(@Param('id') id: string, @Body() body: any) {
+    return this.candidateService.saveProfile(id, body);
+  }
+
   @Get(':id/upload-status')
   getUploadStatus(@Param('id') id: string) {
     return this.candidateService.getUploadStatus(id);
