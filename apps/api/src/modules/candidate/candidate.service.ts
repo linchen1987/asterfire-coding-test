@@ -172,6 +172,21 @@ export class CandidateService {
     return existing;
   }
 
+  createWithRawText(data: {
+    jobId: string;
+    fileName: string;
+    filePath: string;
+    fileSize: number;
+    pageCount: number;
+    rawText: string;
+  }) {
+    const id = randomUUID();
+    this.db.prepare(
+      `INSERT INTO candidates (id, job_id, file_name, file_path, file_size, page_count, raw_text, upload_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL)`
+    ).run(id, data.jobId, data.fileName, data.filePath, data.fileSize, data.pageCount, data.rawText);
+    return this.findOne(id);
+  }
+
   getUploadStatus(id: string) {
     const row = this.db.prepare('SELECT id, upload_status, raw_text FROM candidates WHERE id = ?').get(id) as any;
     if (!row) throw new NotFoundException('Candidate not found');
