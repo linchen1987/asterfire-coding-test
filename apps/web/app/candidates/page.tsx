@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge } from "@/components/candidate/status-badge"
 import { LayoutGrid, List, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { ScoreRing } from "@/components/charts/score-ring"
+import { getScoreColor } from "@/lib/score-colors"
 
 export default function CandidatesPage() {
   const [jobId, setJobId] = useState<string>("all")
@@ -115,7 +117,18 @@ export default function CandidatesPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center p-12 text-muted-foreground">加载中...</div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="flex items-center gap-4 rounded-md border px-4 py-3">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-10" />
+              <Skeleton className="h-4 w-10" />
+              <Skeleton className="h-5 w-12" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
       ) : candidates.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-muted-foreground">
           <FileText className="h-12 w-12 mb-3" />
@@ -123,7 +136,8 @@ export default function CandidatesPage() {
           <p className="text-sm mt-1">请先在"上传"页面上传简历并完成 AI 提取</p>
         </div>
       ) : view === "table" ? (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
+          <div className="min-w-[700px]">
           <div className="grid grid-cols-[1fr_140px_90px_90px_80px_160px] gap-4 border-b bg-muted/50 px-4 py-3 text-sm font-medium">
             <div>姓名</div>
             <div>岗位</div>
@@ -143,7 +157,7 @@ export default function CandidatesPage() {
                   <div className="text-muted-foreground truncate text-xs">{job?.title || "—"}</div>
                   <div>
                     {c.overallScore != null ? (
-                      <span className={`font-semibold ${c.overallScore >= 80 ? "text-green-600" : c.overallScore >= 60 ? "text-blue-600" : "text-amber-600"}`}>
+                      <span className={`font-semibold ${getScoreColor(c.overallScore)}`}>
                         {c.overallScore}
                       </span>
                     ) : (
@@ -166,6 +180,7 @@ export default function CandidatesPage() {
               </Link>
             )
           })}
+          </div>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

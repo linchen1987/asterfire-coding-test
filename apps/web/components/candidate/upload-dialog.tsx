@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api-client"
 import type { JobDescription } from "@app/shared"
+import { toast } from "sonner"
 
 interface UploadDialogProps {
   open: boolean
@@ -55,7 +56,13 @@ export function UploadDialog({ open, onOpenChange, onUploadComplete }: UploadDia
       (f) => f.type === "application/pdf" || f.name.endsWith(".pdf")
     )
     const newFiles = pdfFiles.map((f) => ({ file: f, id: crypto.randomUUID() }))
-    setFiles((prev) => [...prev, ...newFiles].slice(0, 10))
+    setFiles((prev) => {
+      const next = [...prev, ...newFiles].slice(0, 10)
+      if (prev.length + newFiles.length > 10) {
+        toast.warning("最多上传 10 个文件，超出部分已忽略")
+      }
+      return next
+    })
   }, [])
 
   const removeFile = (id: string) => {
@@ -67,6 +74,9 @@ export function UploadDialog({ open, onOpenChange, onUploadComplete }: UploadDia
     accept: { "application/pdf": [".pdf"] },
     maxSize: 10 * 1024 * 1024,
     maxFiles: 10,
+    onDropRejected: (rejections) => {
+      toast.warning(`${rejections.length} 个文件不符合要求（仅支持 PDF，单个最大 10MB）`)
+    },
   })
 
   const handleUpload = async () => {
@@ -85,8 +95,8 @@ export function UploadDialog({ open, onOpenChange, onUploadComplete }: UploadDia
       onOpenChange(false)
       onUploadComplete()
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Upload failed"
-      console.error("Upload failed:", message)
+      const message = e instanceof Error ? e.message : "上传失败，请重试"
+      toast.error(message)
     } finally {
       setUploading(false)
     }

@@ -4,6 +4,7 @@ import { useState, useCallback } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { UploadDialog } from "@/components/candidate/upload-dialog"
 import { ExtractList } from "@/components/candidate/extract-list"
 import { api } from "@/lib/api-client"
@@ -58,7 +59,17 @@ export default function UploadPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center p-12 text-muted-foreground">加载中...</div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex items-center gap-4 rounded-md border px-4 py-4">
+              <Skeleton className="h-8 w-8 rounded" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <ExtractList
           candidates={candidates}

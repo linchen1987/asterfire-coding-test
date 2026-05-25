@@ -37,7 +37,7 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">数据统计与概览</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
             <StatCardSkeleton key={i} />
           ))}
         </div>

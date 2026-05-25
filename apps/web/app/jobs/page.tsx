@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { SkillTags } from "@/components/job/skill-tags"
 import { Plus, Pencil, Trash2, Briefcase, Users } from "lucide-react"
@@ -98,7 +99,20 @@ export default function JobsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center p-12 text-muted-foreground">加载中...</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-full" />
+                <div className="flex gap-1">
+                  <Skeleton className="h-5 w-12" />
+                  <Skeleton className="h-5 w-12" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : jobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-muted-foreground">
           <Briefcase className="h-12 w-12 mb-3" />
