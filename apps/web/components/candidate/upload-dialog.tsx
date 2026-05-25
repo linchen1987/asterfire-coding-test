@@ -84,8 +84,9 @@ export function UploadDialog({ open, onOpenChange, onUploadComplete }: UploadDia
       setSelectedJobId("")
       onOpenChange(false)
       onUploadComplete()
-    } catch (e: any) {
-      console.error("Upload failed:", e)
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Upload failed"
+      console.error("Upload failed:", message)
     } finally {
       setUploading(false)
     }

@@ -27,7 +27,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       toast.success("岗位信息已更新")
     },
-    onError: (e: any) => toast.error(e.message || "保存失败"),
+    onError: (e: Error) => toast.error(e.message || "保存失败"),
   })
 
   if (isLoading || !job) {

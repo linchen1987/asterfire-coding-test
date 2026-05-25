@@ -44,6 +44,41 @@ export interface Project {
   highlights: string | null;
 }
 
+export interface PartialBasics {
+  name?: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+}
+
+export interface PartialEducation {
+  school?: string;
+  major?: string;
+  degree?: string;
+  graduatedAt?: string;
+}
+
+export interface PartialWorkExperience {
+  company?: string;
+  position?: string;
+  startDate?: string;
+  endDate?: string;
+  summary?: string;
+}
+
+export interface PartialSkill {
+  name: string;
+  category?: string;
+}
+
+export interface PartialData {
+  basics?: PartialBasics;
+  education?: PartialEducation[];
+  workExperience?: PartialWorkExperience[];
+  skills?: PartialSkill[];
+  projects?: unknown[];
+}
+
 export interface Candidate extends CandidateBasics {
   id: string;
   jobId: string;

@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api-client"
-import type { Candidate, JobDescription } from "@app/shared"
+import type { Candidate, CandidateStatus, JobDescription } from "@app/shared"
 import { CANDIDATE_STATUSES } from "@app/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -155,7 +155,7 @@ export default function CandidatesPage() {
                       <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0">{s.name}</Badge>
                     ))}
                     {(c.skills?.length || 0) > 2 && (
-                      <span className="text-[10px] text-muted-foreground">+{c.skills!.length - 2}</span>
+                      <span className="text-[10px] text-muted-foreground">+{(c.skills?.length ?? 0) - 2}</span>
                     )}
                   </div>
                   <div>

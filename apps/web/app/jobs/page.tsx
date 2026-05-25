@@ -40,7 +40,7 @@ export default function JobsPage() {
       setBonusSkills([])
       toast.success("岗位创建成功")
     },
-    onError: (e: any) => toast.error(e.message || "创建失败"),
+    onError: (e: Error) => toast.error(e.message || "创建失败"),
   })
 
   const deleteMutation = useMutation({
@@ -49,7 +49,7 @@ export default function JobsPage() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       toast.success("岗位已删除")
     },
-    onError: (e: any) => toast.error(e.message || "删除失败"),
+    onError: (e: Error) => toast.error(e.message || "删除失败"),
   })
 
   return (

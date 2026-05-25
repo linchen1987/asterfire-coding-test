@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Briefcase, FileText, TrendingUp, Clock, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { StatusBadge } from "@/components/candidate/status-badge"
+import { StatCard } from "@/components/stat-card"
+import type { CandidateStatus } from "@app/shared"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
 interface StatsOverview {
@@ -36,14 +38,7 @@ export default function DashboardPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map(i => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-12 bg-muted animate-pulse rounded" />
-              </CardContent>
-            </Card>
+            <StatCardSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -51,10 +46,10 @@ export default function DashboardPage() {
   }
 
   const statusCards = [
-    { label: "待筛选", count: stats.statusCounts.pending, icon: FileText, color: "text-muted-foreground" },
-    { label: "初筛通过", count: stats.statusCounts.screened, icon: CheckCircle2, color: "text-blue-500" },
-    { label: "面试中", count: stats.statusCounts.interviewing, icon: Clock, color: "text-amber-500" },
-    { label: "已录用", count: stats.statusCounts.hired, icon: Users, color: "text-green-500" },
+    { title: "待筛选", value: stats.statusCounts.pending, icon: FileText, iconClassName: "text-muted-foreground" },
+    { title: "初筛通过", value: stats.statusCounts.screened, icon: CheckCircle2, iconClassName: "text-blue-500" },
+    { title: "面试中", value: stats.statusCounts.interviewing, icon: Clock, iconClassName: "text-amber-500" },
+    { title: "已录用", value: stats.statusCounts.hired, icon: Users, iconClassName: "text-green-500" },
   ]
 
   const chartData = stats.jobStats.map(j => ({
@@ -71,55 +66,15 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">总候选人</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCandidates}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">岗位数量</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalJobs}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">平均评分</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.avgScore ?? "--"}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">已淘汰</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.statusCounts.rejected}</div>
-          </CardContent>
-        </Card>
+        <StatCard title="总候选人" value={stats.totalCandidates} icon={Users} />
+        <StatCard title="岗位数量" value={stats.totalJobs} icon={Briefcase} />
+        <StatCard title="平均评分" value={stats.avgScore ?? "--"} icon={TrendingUp} />
+        <StatCard title="已淘汰" value={stats.statusCounts.rejected} icon={Users} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         {statusCards.map(s => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{s.label}</CardTitle>
-              <s.icon className={`h-4 w-4 ${s.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{s.count}</div>
-            </CardContent>
-          </Card>
+          <StatCard key={s.title} {...s} />
         ))}
       </div>
 
@@ -168,7 +123,7 @@ export default function DashboardPage() {
                       {r.overallScore != null && (
                         <span className="text-sm font-semibold">{r.overallScore}</span>
                       )}
-                      <StatusBadge status={r.status as any} />
+                      <StatusBadge status={r.status as CandidateStatus | null} />
                       <span className="text-xs text-muted-foreground w-28 text-right">{r.createdAt}</span>
                     </div>
                   </Link>
@@ -181,5 +136,18 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function StatCardSkeleton() {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+      </CardHeader>
+      <CardContent>
+        <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+      </CardContent>
+    </Card>
   )
 }

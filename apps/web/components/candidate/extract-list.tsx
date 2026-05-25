@@ -1,21 +1,13 @@
 "use client"
 
 import { ExtractProgress } from "./extract-progress"
-import type { Candidate } from "@app/shared"
-
-interface PartialData {
-  basics?: any
-  education?: any[]
-  workExperience?: any[]
-  skills?: any[]
-  projects?: any[]
-}
+import type { Candidate, PartialData } from "@app/shared"
 
 interface ExtractListProps {
   candidates: Candidate[]
   extractingId?: string | null
   onExtract: (id: string) => void
-  onSaveProfile: (id: string, data: any) => Promise<void>
+  onSaveProfile: (id: string, data: PartialData) => Promise<void>
   partialDataMap?: Record<string, PartialData>
   progressMap?: Record<string, string | null>
   errorMap?: Record<string, string | null>

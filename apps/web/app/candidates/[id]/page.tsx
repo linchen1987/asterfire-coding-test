@@ -1,9 +1,9 @@
 "use client"
 
-import { use, useState, useRef, useCallback } from "react"
+import { use, useState, useRef, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api-client"
-import type { Candidate } from "@app/shared"
+import type { Candidate, CandidateStatus } from "@app/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,10 +11,12 @@ import { Separator } from "@/components/ui/separator"
 import { ScoreRadar } from "@/components/charts/score-radar"
 import { ScoreRing } from "@/components/charts/score-ring"
 import { StatusBadge } from "@/components/candidate/status-badge"
+import { useScoreStream } from "@/hooks/use-score-stream"
 import {
   User, GraduationCap, Briefcase, Wrench, FolderOpen,
   Loader2, Sparkles, ArrowLeft, MessageSquare, Brain, RotateCcw,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -22,99 +24,50 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
   const { id } = use(params)
   const queryClient = useQueryClient()
   const [transitioning, setTransitioning] = useState(false)
-
-  const [scoring, setScoring] = useState(false)
-  const [scoreThinking, setScoreThinking] = useState("")
-  const [scoreCommentStream, setScoreCommentStream] = useState("")
-  const [scoreProgress, setScoreProgress] = useState("")
   const thinkingRef = useRef<HTMLDivElement>(null)
+  const userScrolledUp = useRef(false)
 
   const { data: candidate, isLoading } = useQuery<Candidate>({
     queryKey: ["candidate", id],
     queryFn: () => api.get(`/candidates/${id}`),
   })
 
-  const handleScore = useCallback(async () => {
-    setScoring(true)
-    setScoreThinking("")
-    setScoreCommentStream("")
-    setScoreProgress("正在连接 AI 服务...")
+  const handleScoreComplete = (_candidateId: string) => {
+    toast.success("评分完成")
+    queryClient.invalidateQueries({ queryKey: ["candidate", id] })
+  }
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
+  const { scoring, scoreThinking, scoreCommentStream, scoreProgress, startScore } = useScoreStream(handleScoreComplete)
 
-    try {
-      const res = await fetch(`${API_BASE}/candidates/${id}/score`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      if (!res.ok || !res.body) {
-        throw new Error(res.statusText || '评分请求失败')
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.slice(7).trim()
-            continue
-          }
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6)
-            try {
-              const data = JSON.parse(dataStr)
-
-              const prevLine2 = lines[lines.indexOf(line) - 1] || ''
-              const eventType = prevLine2.startsWith('event: ') ? prevLine2.slice(7).trim() : ''
-
-              if (eventType === 'progress') {
-                setScoreProgress(data.message || '')
-              } else if (eventType === 'thinking') {
-                setScoreThinking(prev => {
-                  const next = prev + (data.delta || '')
-                  setTimeout(() => thinkingRef.current?.scrollTo(0, thinkingRef.current.scrollHeight), 0)
-                  return next
-                })
-              } else if (eventType === 'partial') {
-                setScoreCommentStream(prev => prev + (data.delta || ''))
-              } else if (eventType === 'complete') {
-                toast.success("评分完成")
-                queryClient.invalidateQueries({ queryKey: ["candidate", id] })
-              } else if (eventType === 'error') {
-                throw new Error(data.message || '评分失败')
-              }
-            } catch (e: any) {
-              if (e.message && !e.message.includes('JSON')) throw e
-            }
-          }
-        }
-      }
-    } catch (e: any) {
-      toast.error(e.message || "评分失败")
-    } finally {
-      setScoring(false)
-      setScoreProgress("")
+  useEffect(() => {
+    const el = thinkingRef.current
+    if (!el) return
+    if (!userScrolledUp.current) {
+      el.scrollTop = el.scrollHeight
     }
-  }, [id, queryClient])
+  }, [scoreThinking])
 
-  const handleStatusChange = async (status: any) => {
+  useEffect(() => {
+    const el = thinkingRef.current
+    if (!el) return
+    const handleScroll = () => {
+      if (!el) return
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20
+      userScrolledUp.current = !atBottom
+    }
+    el.addEventListener("scroll", handleScroll)
+    return () => el.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  const handleStatusChange = async (status: CandidateStatus) => {
     setTransitioning(true)
     try {
       await api.put(`/candidates/${id}/status`, { status })
       toast.success("状态已更新")
       queryClient.invalidateQueries({ queryKey: ["candidate", id] })
-    } catch (e: any) {
-      toast.error(e.message || "状态更新失败")
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "状态更新失败"
+      toast.error(message)
     } finally {
       setTransitioning(false)
     }
@@ -129,7 +82,6 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
   }
 
   const hasScore = candidate.overallScore != null
-
   const showStreamingUI = scoring
   const showScoreResult = hasScore && !scoring
 
@@ -215,7 +167,7 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
                     <div className="font-medium">{proj.name}</div>
                     {proj.techStack && (
                       <div className="flex flex-wrap gap-1">
-                        {(typeof proj.techStack === "string" ? JSON.parse(proj.techStack) : proj.techStack).map((t: string, j: number) => (
+                        {parseTechStack(proj.techStack).map((t: string, j: number) => (
                           <Badge key={j} variant="outline" className="text-xs">{t}</Badge>
                         ))}
                       </div>
@@ -296,7 +248,7 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
                     </div>
                   </div>
                   <div className="flex justify-center pt-2">
-                    <Button size="sm" variant="outline" onClick={handleScore} disabled={scoring}>
+                    <Button size="sm" variant="outline" onClick={() => startScore(id)} disabled={scoring}>
                       <RotateCcw className="h-3 w-3 mr-1" /> 重新评分
                     </Button>
                   </div>
@@ -304,7 +256,7 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
               ) : (
                 <div className="flex flex-col items-center gap-3 py-6">
                   <p className="text-sm text-muted-foreground">尚未评分</p>
-                  <Button onClick={handleScore} disabled={scoring}>
+                  <Button onClick={() => startScore(id)} disabled={scoring}>
                     <Sparkles className="mr-1 h-3 w-3" />开始评分
                   </Button>
                 </div>
@@ -330,7 +282,20 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
   )
 }
 
-function InfoSection({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+function parseTechStack(raw: string | unknown[]): string[] {
+  if (Array.isArray(raw)) return raw.filter((t): t is string => typeof t === "string")
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function InfoSection({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <Card>
       <CardHeader className="pb-3">

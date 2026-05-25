@@ -9,19 +9,15 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   FileText, Clock, CheckCircle2, XCircle, Loader2,
-  User, GraduationCap, Briefcase, Wrench, Save, Pencil,
+  Save,
   Brain,
 } from "lucide-react"
-import type { Candidate } from "@app/shared"
+import type { Candidate, PartialData } from "@app/shared"
 import { UPLOAD_STATUSES } from "@app/shared"
-
-interface PartialData {
-  basics?: any
-  education?: any[]
-  workExperience?: any[]
-  skills?: any[]
-  projects?: any[]
-}
+import { EditableBasics } from "./editable-basics"
+import { EditableEducation } from "./editable-education"
+import { EditableWork } from "./editable-work"
+import { EditableSkills } from "./editable-skills"
 
 interface ExtractProgressProps {
   candidate: Candidate
@@ -32,108 +28,6 @@ interface ExtractProgressProps {
   progress?: string | null
   error?: string | null
   thinking?: string
-}
-
-function EditableBasics({ data, onChange }: { data: any; onChange: (d: any) => void }) {
-  const update = (key: string, val: string) => onChange({ ...data, [key]: val })
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5 text-sm font-medium"><User className="h-3.5 w-3.5" /> 基本信息</div>
-      <div className="grid grid-cols-2 gap-2 pl-5">
-        <Input placeholder="姓名" value={data.name || ""} onChange={e => update("name", e.target.value)} className="h-8 text-sm" />
-        <Input placeholder="电话" value={data.phone || ""} onChange={e => update("phone", e.target.value)} className="h-8 text-sm" />
-        <Input placeholder="邮箱" value={data.email || ""} onChange={e => update("email", e.target.value)} className="h-8 text-sm" />
-        <Input placeholder="城市" value={data.city || ""} onChange={e => update("city", e.target.value)} className="h-8 text-sm" />
-      </div>
-    </div>
-  )
-}
-
-function EditableEducation({ data, onChange }: { data: any[]; onChange: (d: any[]) => void }) {
-  const updateItem = (i: number, key: string, val: string) => {
-    const next = [...data]; next[i] = { ...next[i], [key]: val }; onChange(next)
-  }
-  const addItem = () => onChange([...data, { school: "", major: "", degree: "", graduatedAt: "" }])
-  const removeItem = (i: number) => onChange(data.filter((_, idx) => idx !== i))
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5 text-sm font-medium"><GraduationCap className="h-3.5 w-3.5" /> 教育背景</div>
-      <div className="space-y-2 pl-5">
-        {data.map((edu, i) => (
-          <div key={i} className="grid grid-cols-2 gap-2 items-start">
-            <Input placeholder="学校" value={edu.school || ""} onChange={e => updateItem(i, "school", e.target.value)} className="h-8 text-sm" />
-            <Input placeholder="专业" value={edu.major || ""} onChange={e => updateItem(i, "major", e.target.value)} className="h-8 text-sm" />
-            <Input placeholder="学历" value={edu.degree || ""} onChange={e => updateItem(i, "degree", e.target.value)} className="h-8 text-sm" />
-            <div className="flex gap-1">
-              <Input placeholder="毕业时间" value={edu.graduatedAt || ""} onChange={e => updateItem(i, "graduatedAt", e.target.value)} className="h-8 text-sm" />
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeItem(i)}><XCircle className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-            </div>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={addItem} className="h-7 text-xs">+ 添加</Button>
-      </div>
-    </div>
-  )
-}
-
-function EditableWork({ data, onChange }: { data: any[]; onChange: (d: any[]) => void }) {
-  const updateItem = (i: number, key: string, val: string) => {
-    const next = [...data]; next[i] = { ...next[i], [key]: val }; onChange(next)
-  }
-  const addItem = () => onChange([...data, { company: "", position: "", startDate: "", endDate: "", summary: "" }])
-  const removeItem = (i: number) => onChange(data.filter((_, idx) => idx !== i))
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5 text-sm font-medium"><Briefcase className="h-3.5 w-3.5" /> 工作经历</div>
-      <div className="space-y-2 pl-5">
-        {data.map((exp, i) => (
-          <div key={i} className="space-y-1">
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="公司" value={exp.company || ""} onChange={e => updateItem(i, "company", e.target.value)} className="h-8 text-sm" />
-              <Input placeholder="职位" value={exp.position || ""} onChange={e => updateItem(i, "position", e.target.value)} className="h-8 text-sm" />
-              <Input placeholder="开始时间" value={exp.startDate || ""} onChange={e => updateItem(i, "startDate", e.target.value)} className="h-8 text-sm" />
-              <div className="flex gap-1">
-                <Input placeholder="结束时间" value={exp.endDate || ""} onChange={e => updateItem(i, "endDate", e.target.value)} className="h-8 text-sm" />
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeItem(i)}><XCircle className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-              </div>
-            </div>
-            <Input placeholder="工作摘要" value={exp.summary || ""} onChange={e => updateItem(i, "summary", e.target.value)} className="h-8 text-sm" />
-          </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={addItem} className="h-7 text-xs">+ 添加</Button>
-      </div>
-    </div>
-  )
-}
-
-function EditableSkills({ data, onChange }: { data: any[]; onChange: (d: any[]) => void }) {
-  const [input, setInput] = useState("")
-  const addSkill = () => {
-    const name = input.trim()
-    if (name && !data.some(s => s.name === name)) {
-      onChange([...data, { name, category: "other" }])
-    }
-    setInput("")
-  }
-  const removeSkill = (name: string) => onChange(data.filter(s => s.name !== name))
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5 text-sm font-medium"><Wrench className="h-3.5 w-3.5" /> 技能标签</div>
-      <div className="pl-5 space-y-2">
-        <div className="flex flex-wrap gap-1">
-          {data.map((s, i) => (
-            <Badge key={i} variant="secondary" className="text-xs cursor-pointer hover:bg-destructive/20" onClick={() => removeSkill(s.name)}>
-              {s.name} <XCircle className="ml-1 h-3 w-3" />
-            </Badge>
-          ))}
-        </div>
-        <div className="flex gap-1">
-          <Input placeholder="输入技能，回车添加" value={input} onChange={e => setInput(e.target.value)} className="h-8 text-sm" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSkill() } }} />
-          <Button variant="outline" size="sm" onClick={addSkill} className="h-8 shrink-0">添加</Button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function SkeletonBlock() {
@@ -184,10 +78,10 @@ export function ExtractProgress({ candidate, onExtract, onSaveProfile, extractin
     }
   }
 
-  const updateBasics = (d: any) => setEditData(prev => ({ ...prev, basics: d }))
-  const updateEducation = (d: any[]) => setEditData(prev => ({ ...prev, education: d }))
-  const updateWork = (d: any[]) => setEditData(prev => ({ ...prev, workExperience: d }))
-  const updateSkills = (d: any[]) => setEditData(prev => ({ ...prev, skills: d }))
+  const updateBasics = (d: PartialData["basics"]) => setEditData(prev => ({ ...prev, basics: d }))
+  const updateEducation = (d: PartialData["education"]) => setEditData(prev => ({ ...prev, education: d }))
+  const updateWork = (d: PartialData["workExperience"]) => setEditData(prev => ({ ...prev, workExperience: d }))
+  const updateSkills = (d: PartialData["skills"]) => setEditData(prev => ({ ...prev, skills: d }))
 
   return (
     <Card>

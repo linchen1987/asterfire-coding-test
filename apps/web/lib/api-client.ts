@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -13,12 +13,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     url += `?${sp.toString()}`;
   }
 
+  const isFormData = fetchOptions.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(fetchOptions.headers as Record<string, string> | undefined),
+  };
+
   const res = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...fetchOptions.headers,
-    },
     ...fetchOptions,
+    headers,
   });
 
   const json = await res.json();
@@ -45,6 +48,5 @@ export const api = {
     request<T>(path, {
       method: 'POST',
       body: formData,
-      headers: {} as Record<string, string>,
     }),
 };
