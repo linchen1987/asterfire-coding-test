@@ -4,6 +4,7 @@ import { DbModule } from './db/db.module';
 import { JobModule } from './modules/job/job.module';
 import { CandidateModule } from './modules/candidate/candidate.module';
 import { AiModule } from './modules/ai/ai.module';
+import { StatsModule } from './modules/stats/stats.module';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -15,6 +16,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     JobModule,
     CandidateModule,
     AiModule,
+    StatsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
