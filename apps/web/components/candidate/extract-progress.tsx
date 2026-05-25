@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -150,6 +150,29 @@ export function ExtractProgress({ candidate, onExtract, onSaveProfile, extractin
   const [editData, setEditData] = useState<PartialData>({})
   const [saving, setSaving] = useState(false)
 
+  const thinkingRef = useRef<HTMLDivElement>(null)
+  const userScrolledUp = useRef(false)
+
+  useEffect(() => {
+    const el = thinkingRef.current
+    if (!el) return
+    if (!userScrolledUp.current) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [thinking])
+
+  useEffect(() => {
+    const el = thinkingRef.current
+    if (!el) return
+    const handleScroll = () => {
+      if (!el) return
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20
+      userScrolledUp.current = !atBottom
+    }
+    el.addEventListener("scroll", handleScroll)
+    return () => el.removeEventListener("scroll", handleScroll)
+  }, [])
+
   const currentData = isExtracted ? (Object.keys(editData).length > 0 ? editData : partialData!) : {}
 
   const handleSave = async () => {
@@ -209,7 +232,7 @@ export function ExtractProgress({ candidate, onExtract, onSaveProfile, extractin
           <p className="text-sm text-muted-foreground animate-pulse">{progress}</p>
         )}
         {extracting && thinking && (
-          <div className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground max-h-24 overflow-y-auto">
+          <div ref={thinkingRef} className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground max-h-24 overflow-y-auto">
             <div className="flex items-center gap-1.5 mb-1 font-medium">
               <Brain className="h-3 w-3" /> AI 思考过程
             </div>
