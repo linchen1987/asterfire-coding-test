@@ -1,7 +1,7 @@
 "use client"
 
-import { use, useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { use, useState, useRef, useCallback } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api-client"
 import type { Candidate } from "@app/shared"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +13,7 @@ import { ScoreRing } from "@/components/charts/score-ring"
 import { StatusBadge } from "@/components/candidate/status-badge"
 import {
   User, GraduationCap, Briefcase, Wrench, FolderOpen,
-  Loader2, Sparkles, ArrowLeft, MessageSquare,
+  Loader2, Sparkles, ArrowLeft, MessageSquare, Brain, RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -21,26 +21,91 @@ import { toast } from "sonner"
 export default function CandidateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const queryClient = useQueryClient()
-  const [scoring, setScoring] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
+
+  const [scoring, setScoring] = useState(false)
+  const [scoreThinking, setScoreThinking] = useState("")
+  const [scoreCommentStream, setScoreCommentStream] = useState("")
+  const [scoreProgress, setScoreProgress] = useState("")
+  const thinkingRef = useRef<HTMLDivElement>(null)
 
   const { data: candidate, isLoading } = useQuery<Candidate>({
     queryKey: ["candidate", id],
     queryFn: () => api.get(`/candidates/${id}`),
   })
 
-  const handleScore = async () => {
+  const handleScore = useCallback(async () => {
     setScoring(true)
+    setScoreThinking("")
+    setScoreCommentStream("")
+    setScoreProgress("正在连接 AI 服务...")
+
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
+
     try {
-      await api.post(`/candidates/${id}/score`)
-      toast.success("评分完成")
-      queryClient.invalidateQueries({ queryKey: ["candidate", id] })
+      const res = await fetch(`${API_BASE}/candidates/${id}/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!res.ok || !res.body) {
+        throw new Error(res.statusText || '评分请求失败')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.slice(7).trim()
+            continue
+          }
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6)
+            try {
+              const data = JSON.parse(dataStr)
+
+              const prevLine2 = lines[lines.indexOf(line) - 1] || ''
+              const eventType = prevLine2.startsWith('event: ') ? prevLine2.slice(7).trim() : ''
+
+              if (eventType === 'progress') {
+                setScoreProgress(data.message || '')
+              } else if (eventType === 'thinking') {
+                setScoreThinking(prev => {
+                  const next = prev + (data.delta || '')
+                  setTimeout(() => thinkingRef.current?.scrollTo(0, thinkingRef.current.scrollHeight), 0)
+                  return next
+                })
+              } else if (eventType === 'partial') {
+                setScoreCommentStream(prev => prev + (data.delta || ''))
+              } else if (eventType === 'complete') {
+                toast.success("评分完成")
+                queryClient.invalidateQueries({ queryKey: ["candidate", id] })
+              } else if (eventType === 'error') {
+                throw new Error(data.message || '评分失败')
+              }
+            } catch (e: any) {
+              if (e.message && !e.message.includes('JSON')) throw e
+            }
+          }
+        }
+      }
     } catch (e: any) {
       toast.error(e.message || "评分失败")
     } finally {
       setScoring(false)
+      setScoreProgress("")
     }
-  }
+  }, [id, queryClient])
 
   const handleStatusChange = async (status: any) => {
     setTransitioning(true)
@@ -64,6 +129,9 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
   }
 
   const hasScore = candidate.overallScore != null
+
+  const showStreamingUI = scoring
+  const showScoreResult = hasScore && !scoring
 
   return (
     <div className="space-y-6">
@@ -168,7 +236,40 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {hasScore ? (
+              {showStreamingUI ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{scoreProgress || "评分中..."}</span>
+                  </div>
+
+                  {scoreThinking && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Brain className="h-3 w-3" /> AI 思考过程
+                      </div>
+                      <div
+                        ref={thinkingRef}
+                        className="max-h-40 overflow-y-auto rounded-md bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed"
+                      >
+                        {scoreThinking}
+                      </div>
+                    </div>
+                  )}
+
+                  {scoreCommentStream && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <MessageSquare className="h-3 w-3" /> 评语生成中
+                      </div>
+                      <div className="rounded-md border p-3 text-sm text-muted-foreground leading-relaxed">
+                        {scoreCommentStream}
+                        <span className="inline-block w-1 h-4 bg-primary animate-pulse ml-0.5 align-text-bottom" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : showScoreResult ? (
                 <div className="space-y-4">
                   <div className="flex justify-center relative">
                     <ScoreRing score={candidate.overallScore!} />
@@ -194,19 +295,24 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
                       <div className="text-xs text-muted-foreground">教育</div>
                     </div>
                   </div>
+                  <div className="flex justify-center pt-2">
+                    <Button size="sm" variant="outline" onClick={handleScore} disabled={scoring}>
+                      <RotateCcw className="h-3 w-3 mr-1" /> 重新评分
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3 py-6">
                   <p className="text-sm text-muted-foreground">尚未评分</p>
                   <Button onClick={handleScore} disabled={scoring}>
-                    {scoring ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" />评分中...</> : <><Sparkles className="mr-1 h-3 w-3" />开始评分</>}
+                    <Sparkles className="mr-1 h-3 w-3" />开始评分
                   </Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {hasScore && candidate.aiComment && (
+          {(showScoreResult && candidate.aiComment) && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">

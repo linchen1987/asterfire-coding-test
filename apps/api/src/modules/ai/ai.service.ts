@@ -64,10 +64,10 @@ ${rawText}
     yield { type: 'done' };
   }
 
-  async scoreCandidate(candidateJson: string, jobJson: string) {
+  async *scoreCandidateStream(candidateJson: string, jobJson: string): AsyncGenerator<StreamChunk> {
     const model = process.env.AI_MODEL || 'gpt-4o';
 
-    const response = await this.openai.chat.completions.create({
+    const stream = await this.openai.chat.completions.create({
       model,
       messages: [
         {
@@ -93,10 +93,23 @@ ${jobJson}
         },
       ],
       temperature: 0.1,
+      stream: true,
     });
 
-    const content = response.choices[0]?.message?.content || '';
-    return this.parseJson(content);
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      if (!delta) continue;
+
+      if ((delta as any).reasoning_content) {
+        yield { type: 'thinking', content: (delta as any).reasoning_content };
+      }
+
+      if (delta.content) {
+        yield { type: 'content', content: delta.content };
+      }
+    }
+
+    yield { type: 'done' };
   }
 
   private parseJson(text: string): any {
