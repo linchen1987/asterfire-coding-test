@@ -11,12 +11,12 @@ import { ChevronDown } from "lucide-react"
 import type { CandidateStatus } from "@app/shared"
 import { CANDIDATE_STATUSES } from "@app/shared"
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  screened: "default",
-  interviewing: "outline",
-  hired: "default",
-  rejected: "destructive",
+const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300",
+  screened: "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300",
+  interviewing: "bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300",
+  hired: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300",
+  rejected: "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300",
 }
 
 interface StatusBadgeProps {
@@ -33,24 +33,31 @@ const NEXT_STATUSES: Record<string, CandidateStatus[]> = {
 
 export function StatusBadge({ status, onStatusChange, transitioning }: StatusBadgeProps) {
   if (!status) {
-    return <Badge variant="secondary" className="text-xs">—</Badge>
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
+        —
+      </span>
+    )
   }
 
   const info = CANDIDATE_STATUSES[status]
   const allowed = NEXT_STATUSES[status] || []
+  const style = STATUS_STYLES[status] ?? "bg-muted text-muted-foreground"
 
   if (!onStatusChange || allowed.length === 0) {
-    return <Badge variant={STATUS_VARIANTS[status]} className="text-xs">{info.label}</Badge>
+    return (
+      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${style}`}>
+        {info.label}
+      </span>
+    )
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="inline-flex items-center gap-1 focus:outline-none" disabled={transitioning}>
-          <Badge variant={STATUS_VARIANTS[status]} className="text-xs cursor-pointer">
-            {transitioning ? "..." : info.label}
-          </Badge>
-          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        <button className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors ${style}`} disabled={transitioning}>
+          {transitioning ? "..." : info.label}
+          <ChevronDown className="h-3 w-3 opacity-50" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">

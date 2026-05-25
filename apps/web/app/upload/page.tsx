@@ -49,8 +49,8 @@ export default function UploadPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">简历上传与解析</h1>
-          <p className="text-muted-foreground">上传 PDF 简历并使用 AI 提取信息</p>
+          <h1 className="text-2xl font-bold tracking-tight">简历上传与解析</h1>
+          <p className="text-muted-foreground text-sm mt-1">上传 PDF 简历并使用 AI 提取信息</p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>
           <Upload className="mr-2 h-4 w-4" />

@@ -15,6 +15,7 @@ import { SkillTags } from "@/components/job/skill-tags"
 import { Plus, Pencil, Trash2, Briefcase, Users } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { EmptyState } from "@/components/empty-state"
 
 export default function JobsPage() {
   const queryClient = useQueryClient()
@@ -57,8 +58,8 @@ export default function JobsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">岗位管理</h1>
-          <p className="text-muted-foreground">管理招聘岗位需求</p>
+          <h1 className="text-2xl font-bold tracking-tight">岗位管理</h1>
+          <p className="text-muted-foreground text-sm mt-1">管理招聘岗位需求</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -114,11 +115,11 @@ export default function JobsPage() {
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-muted-foreground">
-          <Briefcase className="h-12 w-12 mb-3" />
-          <p>暂无岗位</p>
-          <p className="text-sm mt-1">点击"新建岗位"添加招聘岗位</p>
-        </div>
+        <EmptyState
+          icon={Briefcase}
+          title="暂无岗位"
+          description="点击「新建岗位」添加招聘岗位需求"
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {jobs.map(job => (

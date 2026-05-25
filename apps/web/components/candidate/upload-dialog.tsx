@@ -128,19 +128,21 @@ export function UploadDialog({ open, onOpenChange, onUploadComplete }: UploadDia
 
           <div
             {...getRootProps()}
-            className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${
+            className={`group relative flex flex-col items-center justify-center rounded-xl p-8 cursor-pointer transition-all duration-200 ${
               isDragActive
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/25 hover:border-primary/50"
+                ? "border-2 border-primary bg-primary/5 scale-[1.01]"
+                : "border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 hover:bg-muted/30"
             }`}
           >
             <input {...getInputProps()} />
-            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
-              拖拽 PDF 文件到此处，或点击选择
+            <div className={`flex h-12 w-12 items-center justify-center rounded-full mb-3 transition-colors ${isDragActive ? "bg-primary/15" : "bg-muted"}`}>
+              <Upload className={`h-5 w-5 transition-colors ${isDragActive ? "text-primary" : "text-muted-foreground"}`} />
+            </div>
+            <p className="text-sm font-medium">
+              {isDragActive ? "释放文件以上传" : "拖拽 PDF 文件到此处，或点击选择"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              最多 10 个文件，每个最大 10MB
+              支持 PDF 格式，最多 10 个文件，单个最大 10MB
             </p>
           </div>
 

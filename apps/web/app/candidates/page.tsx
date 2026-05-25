@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/candidate/status-badge"
 import { LayoutGrid, List, Search, ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { ScoreRing } from "@/components/charts/score-ring"
 import { getScoreColor } from "@/lib/score-colors"
+import { EmptyState } from "@/components/empty-state"
 
 export default function CandidatesPage() {
   const [jobId, setJobId] = useState<string>("all")
@@ -67,8 +68,8 @@ export default function CandidatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">候选人管理</h1>
-        <p className="text-muted-foreground">共 {data?.total || 0} 位候选人</p>
+        <h1 className="text-2xl font-bold tracking-tight">候选人管理</h1>
+        <p className="text-muted-foreground text-sm mt-1">共 {data?.total || 0} 位候选人</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -130,11 +131,12 @@ export default function CandidatesPage() {
           ))}
         </div>
       ) : candidates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-muted-foreground">
-          <FileText className="h-12 w-12 mb-3" />
-          <p>暂无候选人数据</p>
-          <p className="text-sm mt-1">请先在"上传"页面上传简历并完成 AI 提取</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="暂无候选人数据"
+          description="请先在上传页面上传简历并完成 AI 提取"
+          action={{ label: "前往上传", href: "/upload" }}
+        />
       ) : view === "table" ? (
         <div className="rounded-md border overflow-x-auto">
           <div className="min-w-[700px]">

@@ -93,7 +93,7 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{candidate.name || "未知候选人"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{candidate.name || "未知候选人"}</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {candidate.fileName} · {candidate.createdAt}
             </p>

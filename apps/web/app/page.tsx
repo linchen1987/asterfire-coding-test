@@ -33,8 +33,8 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">概览</h1>
-          <p className="text-muted-foreground">数据统计与概览</p>
+          <h1 className="text-2xl font-bold tracking-tight">概览</h1>
+          <p className="text-muted-foreground text-sm mt-1">数据统计与概览</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
@@ -44,13 +44,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
-  const statusCards = [
-    { title: "待筛选", value: stats.statusCounts.pending, icon: FileText, iconClassName: "text-muted-foreground" },
-    { title: "初筛通过", value: stats.statusCounts.screened, icon: CheckCircle2, iconClassName: "text-blue-500" },
-    { title: "面试中", value: stats.statusCounts.interviewing, icon: Clock, iconClassName: "text-amber-500" },
-    { title: "已录用", value: stats.statusCounts.hired, icon: Users, iconClassName: "text-green-500" },
-  ]
 
   const chartData = stats.jobStats.map(j => ({
     name: j.title.length > 6 ? j.title.slice(0, 6) + "..." : j.title,
@@ -66,16 +59,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="总候选人" value={stats.totalCandidates} icon={Users} />
-        <StatCard title="岗位数量" value={stats.totalJobs} icon={Briefcase} />
-        <StatCard title="平均评分" value={stats.avgScore ?? "--"} icon={TrendingUp} />
-        <StatCard title="已淘汰" value={stats.statusCounts.rejected} icon={Users} />
+        <StatCard title="总候选人" value={stats.totalCandidates} icon={Users} iconClassName="bg-blue-600" />
+        <StatCard title="岗位数量" value={stats.totalJobs} icon={Briefcase} iconClassName="bg-violet-600" />
+        <StatCard title="平均评分" value={stats.avgScore ?? "--"} icon={TrendingUp} iconClassName="bg-teal-600" />
+        <StatCard title="已淘汰" value={stats.statusCounts.rejected} icon={Users} iconClassName="bg-rose-500" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        {statusCards.map(s => (
-          <StatCard key={s.title} {...s} />
-        ))}
+        <StatCard title="待筛选" value={stats.statusCounts.pending} icon={FileText} iconClassName="bg-slate-500" />
+        <StatCard title="初筛通过" value={stats.statusCounts.screened} icon={CheckCircle2} iconClassName="bg-blue-500" />
+        <StatCard title="面试中" value={stats.statusCounts.interviewing} icon={Clock} iconClassName="bg-amber-500" />
+        <StatCard title="已录用" value={stats.statusCounts.hired} icon={Users} iconClassName="bg-emerald-500" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -102,7 +96,7 @@ export default function DashboardPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-[240px] text-muted-foreground text-sm">暂无数据</div>
+              <div className="flex items-center justify-center h-[240px] rounded-lg bg-muted/20 text-muted-foreground text-sm">暂无数据</div>
             )}
           </CardContent>
         </Card>
@@ -130,7 +124,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[240px] text-muted-foreground text-sm">暂无上传记录</div>
+              <div className="flex items-center justify-center h-[240px] rounded-lg bg-muted/20 text-muted-foreground text-sm">暂无上传记录</div>
             )}
           </CardContent>
         </Card>
@@ -142,11 +136,14 @@ export default function DashboardPage() {
 function StatCardSkeleton() {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-      </CardHeader>
-      <CardContent>
-        <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+            <div className="h-7 w-12 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="h-10 w-10 bg-muted animate-pulse rounded-xl" />
+        </div>
       </CardContent>
     </Card>
   )
